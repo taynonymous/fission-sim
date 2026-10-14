@@ -4,341 +4,323 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Chain Reaction Lab</title>
-<meta name="description" content="A stylized, interactive nuclear fission chain-reaction simulator. Compare uranium, plutonium, MOX and thorium fuels, moderators and control rods.">
+<meta name="description" content="Run a nuclear reactor without melting it down. Drag the control rods, manage pumps and emergency cooling, and survive real accident scenarios.">
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#0a1116">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2214%22 cy=%2222%22 r=%229%22 fill=%22%23ffb238%22/%3E%3Ccircle cx=%2227%22 cy=%2215%22 r=%227%22 fill=%22%23ff5c8a%22/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-/* Layout: control-room bench. Reactor pool (always dark) on the left with its
-   instruments beneath; an enamel control panel of engraved plates on the right. */
+/* Layout: one-screen control console. Core pool fills the stage; an instrument
+   rail sits beside it (below on phones); the four plant controls live in a
+   fixed bar at the bottom. Deliberately single dark theme: a night-shift console. */
 :root {
-  --panel: #d6dcd3;
-  --plate: #eef1eb;
-  --plate-2: #e2e7df;
-  --ink: #17201c;
-  --muted: #536058;
-  --line: #b3bcb1;
-  --accent: #1560c2;
-  --accent-soft: rgba(21, 96, 194, 0.12);
-  --on-accent: #ffffff;
-  --ok: #26764a;
-  --warn: #9a6300;
-  --crit: #b3301c;
-  --scram: #c2321d;
-  --scram-ink: #ffffff;
-  --focus: #1560c2;
-  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
-  --f-body: "Barlow", "Segoe UI", system-ui, sans-serif;
-  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --r: 6px;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --panel: #111715; --plate: #1a221f; --plate-2: #212a26; --ink: #e1e8e2; --muted: #93a197;
-    --line: #2f3b36; --accent: #63adff; --accent-soft: rgba(99, 173, 255, 0.14); --on-accent: #06152a;
-    --ok: #5cc584; --warn: #e4a83c; --crit: #ff6d57; --scram: #d93a22; --scram-ink: #ffffff; --focus: #63adff;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --panel: #111715; --plate: #1a221f; --plate-2: #212a26; --ink: #e1e8e2; --muted: #93a197;
-  --line: #2f3b36; --accent: #63adff; --accent-soft: rgba(99, 173, 255, 0.14); --on-accent: #06152a;
-  --ok: #5cc584; --warn: #e4a83c; --crit: #ff6d57; --scram: #d93a22; --scram-ink: #ffffff; --focus: #63adff;
+  --bg: #0a1116;
+  --panel: #111b21;
+  --panel-2: #172530;
+  --line: #24363f;
+  --ink: #e6efe9;
+  --muted: #8ea39b;
+  --accent: #5fb4ff;
+  --amber: #ffb238;
+  --ok: #4fd18b;
+  --warn: #ffc44d;
+  --crit: #ff5a43;
+  --scram: #d8331d;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "Barlow", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
 }
-
 * { box-sizing: border-box; }
-html, body { margin: 0; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
 body {
-  background: var(--panel);
-  color: var(--ink);
-  font: 400 15px/1.5 var(--f-body);
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 16px 32px;
+  background: var(--bg); color: var(--ink);
+  font: 400 15px/1.45 var(--f-body);
+  overflow: hidden; overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
 }
-.wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; }
-
-.label {
-  font: 600 12px/1.2 var(--f-display);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
+button { font: inherit; color: inherit; }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.lbl { font: 600 11px/1.1 var(--f-display); letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); }
 
-/* Header */
-header.bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap;
-  padding-bottom: 12px; border-bottom: 2px solid var(--line);
+#app {
+  height: 100%;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  padding-left: max(10px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
+  padding-block: 8px;
+  gap: 8px;
+  max-width: 1400px; margin: 0 auto;
 }
-.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.brand svg { flex: none; }
-.brand h1 {
-  margin: 0; font: 700 30px/1 var(--f-display); letter-spacing: 0.04em; text-transform: uppercase;
-  text-wrap: balance;
+
+/* Top bar */
+.top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.icon-btn {
+  flex: none; width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); display: grid; place-items: center; cursor: pointer;
 }
-.brand p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
-.state {
-  display: inline-flex; align-items: center; gap: 10px;
-  border: 2px solid currentColor; border-radius: 999px; padding: 6px 14px 6px 10px;
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn[aria-pressed="true"] { border-color: var(--accent); }
+.mission { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.mission-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.mtitle { font: 700 19px/1 var(--f-display); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
+.mdesign { font: 600 12px/1 var(--f-display); letter-spacing: 0.1em; color: var(--accent); border: 1px solid currentColor; border-radius: 4px; padding: 2px 5px; }
+.mgoal { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mbar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.mbar i { display: block; height: 100%; width: 0%; background: var(--ok); transition: width 0.2s; }
+.clock { font: 500 18px/1 var(--f-mono); padding: 0 4px; }
+
+/* Stage */
+.stage { display: grid; gap: 8px; min-height: 0; grid-template-columns: minmax(0, 1fr) 290px; }
+.core-wrap { position: relative; min-height: 0; min-width: 0; border-radius: 10px; overflow: hidden; background: #02080f; border: 1px solid #0f2333; touch-action: none; }
+.core-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.core-hint {
+  position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: calc(100% - 70px); white-space: normal; text-align: center;
+  background: rgba(2, 8, 15, 0.82); color: #bfe0ff; border: 1px solid #1d3a52;
+  font: 500 13px/1.3 var(--f-body); padding: 6px 12px; border-radius: 14px; pointer-events: none;
+  transition: opacity 0.4s;
+}
+.toast {
+  position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+  max-width: calc(100% - 24px); text-align: center;
+  background: rgba(40, 8, 4, 0.92); color: #ffd9cf; border: 1px solid var(--crit);
+  font: 700 15px/1.25 var(--f-display); letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 8px 14px; border-radius: 8px; pointer-events: none;
+}
+.toast.info { background: rgba(4, 18, 34, 0.92); color: #cfe7ff; border-color: var(--accent); }
+
+/* Bank lever */
+.lever { position: absolute; top: 10px; bottom: 10px; right: 8px; width: 34px; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 4px; touch-action: none; cursor: ns-resize; }
+.lever .lbl { color: #8fb3d6; font-size: 9.5px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.lever-track { position: relative; width: 10px; border-radius: 5px; background: rgba(120, 170, 220, 0.16); border: 1px solid rgba(140, 190, 240, 0.28); }
+.lever-handle { position: absolute; left: 50%; width: 30px; height: 18px; margin-left: -15px; margin-top: -9px; border-radius: 5px; background: #c9d6e2; border: 2px solid #f4f8fb; box-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+.lever-handle::after { content: ""; position: absolute; left: 6px; right: 6px; top: 6px; height: 2px; background: #5a6b7a; box-shadow: 0 4px 0 #5a6b7a; top: 3px; }
+.lever-target { position: absolute; left: -4px; right: -4px; height: 2px; background: var(--amber); }
+
+/* Instrument rail */
+.rail { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; min-width: 0; }
+.power-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.power-val { font: 600 34px/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.power-val small { font-size: 16px; color: var(--muted); margin-left: 2px; }
+.power-sub { display: flex; justify-content: space-between; gap: 8px; font: 500 12px/1.2 var(--f-mono); color: var(--muted); }
+.power-sub b { color: var(--ink); font-weight: 500; }
+.power-sub .hot { color: var(--crit); }
+.trend-box { position: relative; height: 86px; min-height: 0; }
+.trend { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.meter { display: grid; grid-template-columns: 74px minmax(0, 1fr) 58px; align-items: center; gap: 8px; }
+.meter .val { font: 500 12.5px/1 var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.bar { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2); overflow: visible; }
+.bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--accent); width: 0%; }
+.bar > b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--crit); }
+.bar > b.limit2 { background: var(--warn); }
+.annun { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.ann {
+  font: 700 10px/1.05 var(--f-display); letter-spacing: 0.06em; text-transform: uppercase; text-align: center;
+  padding: 5px 2px; border-radius: 4px; border: 1px solid #263840; background: #0d161b; color: #4d6068;
+  min-height: 30px; display: grid; place-items: center;
+}
+.ann.on { background: #3a0e08; border-color: var(--crit); color: #ffd2c8; box-shadow: 0 0 10px rgba(255, 90, 67, 0.35); }
+.ann.on.warn { background: #3a2a06; border-color: var(--warn); color: #ffeab8; box-shadow: 0 0 10px rgba(255, 196, 77, 0.25); }
+.ann.blink { animation: blink 0.7s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.35; } }
+
+/* Controls */
+.controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr); gap: 8px; }
+.ctl {
+  display: grid; gap: 2px; align-content: center; text-align: left; cursor: pointer;
+  padding: 8px 12px; min-height: 56px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel);
+}
+.ctl .k { font: 700 15px/1 var(--f-display); letter-spacing: 0.1em; text-transform: uppercase; }
+.ctl .s { font: 500 12px/1.1 var(--f-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctl[aria-pressed="true"] { border-color: var(--ok); background: #0f2a1d; }
+.ctl[aria-pressed="true"] .s { color: #9fe7bf; }
+.ctl.fault { border-color: var(--crit); background: #2b0d09; }
+.ctl.fault .s { color: #ffb4a6; }
+.ctl.eccs[aria-pressed="true"] { border-color: var(--accent); background: #0c2238; }
+.ctl.eccs[aria-pressed="true"] .s { color: #bfe0ff; }
+.ctl:disabled { opacity: 0.45; cursor: not-allowed; }
+.ctl.scram {
+  background: var(--scram); border: 2px solid #ff7a63; text-align: center; justify-items: center;
+  background-image: repeating-linear-gradient(-45deg, transparent 0 12px, rgba(0,0,0,0.12) 12px 24px);
+  box-shadow: inset 0 -4px 0 rgba(0,0,0,0.25);
+}
+.ctl.scram .k { font-size: 24px; letter-spacing: 0.24em; font-weight: 800; color: #fff; }
+.ctl.scram .s { color: #ffe0d9; }
+.ctl.scram.reset { background: #3a2a10; border-color: var(--warn); background-image: none; }
+.ctl.scram.reset .k { font-size: 18px; color: var(--warn); }
+
+/* Overlays */
+.overlay {
+  position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+  background: rgba(3, 7, 10, 0.78); backdrop-filter: blur(3px);
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  -webkit-user-select: text; user-select: text;
+}
+.sheet {
+  width: min(760px, 100%); max-height: 100%; overflow: auto; overscroll-behavior: contain;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px;
+  display: grid; gap: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.sheet h2 { margin: 0; font: 800 34px/1 var(--f-display); letter-spacing: 0.04em; text-transform: uppercase; text-wrap: balance; }
+.sheet h3 { margin: 0; font: 700 20px/1.1 var(--f-display); letter-spacing: 0.05em; text-transform: uppercase; }
+.sheet p { margin: 0; max-width: 64ch; }
+.sheet .muted { color: var(--muted); }
+.kicker { font: 600 12px/1 var(--f-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+.levels { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.lvl {
+  display: grid; gap: 6px; text-align: left; padding: 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel-2); min-width: 0;
+}
+.lvl:hover { border-color: var(--muted); }
+.lvl .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lvl .n { font: 600 12px/1 var(--f-mono); color: var(--muted); }
+.lvl .t { font: 700 19px/1.05 var(--f-display); letter-spacing: 0.04em; text-transform: uppercase; }
+.lvl .d { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.lvl[disabled] { opacity: 0.4; cursor: not-allowed; }
+.chip { font: 600 11px/1 var(--f-display); letter-spacing: 0.1em; color: var(--accent); border: 1px solid currentColor; border-radius: 4px; padding: 3px 5px; white-space: nowrap; }
+.stars { color: var(--amber); letter-spacing: 2px; font-size: 15px; white-space: nowrap; }
+.stars .off { color: #3a4a52; }
+.star-list { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); }
+.star-list span b { color: var(--amber); font-weight: 400; margin-right: 4px; }
+.star-list span.off b { color: #3a4a52; }
+.sheet > * { min-width: 0; }
+.big-stars { font-size: 40px; letter-spacing: 6px; text-align: center; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.fact { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; }
+.fact b { font: 500 16px/1.2 var(--f-mono); }
+.tips { margin: 0; padding-left: 18px; display: grid; gap: 4px; max-width: 64ch; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
   font: 700 15px/1 var(--f-display); letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--muted); background: var(--plate);
+  padding: 13px 18px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer;
 }
-.state .lamp { width: 10px; height: 10px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
-.state .k { font: 500 13px/1 var(--f-mono); letter-spacing: 0; text-transform: none; color: var(--ink); }
-.state[data-s="critical"] { color: var(--ok); }
-.state[data-s="super"] { color: var(--warn); }
-.state[data-s="excursion"] { color: var(--crit); }
-.state[data-s="excursion"] .lamp { animation: blink 0.6s steps(2) infinite; }
-@keyframes blink { 50% { opacity: 0.2; } }
+.btn.primary { background: var(--accent); color: #04121f; border-color: var(--accent); }
+.btn.danger { background: var(--scram); border-color: #ff7a63; color: #fff; }
+.free { display: grid; gap: 8px; padding: 12px; border-radius: 10px; border: 1px dashed var(--line); }
+.free .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.free .chips button { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; font: 700 14px/1 var(--f-display); letter-spacing: 0.08em; }
+.free .chips button:hover { border-color: var(--accent); }
+a { color: var(--accent); }
+.keys { font-size: 13px; color: var(--muted); }
+.keys kbd { font: 500 12px var(--f-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--ink); }
+.fault-row { display: flex; gap: 6px; flex-wrap: wrap; position: absolute; left: 10px; bottom: 10px; }
+.fault-row button { font: 700 11px/1 var(--f-display); letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 9px; border-radius: 6px; border: 1px solid #5a2a22; background: rgba(43, 13, 9, 0.85); color: #ffb4a6; cursor: pointer; }
 
-/* Main grid */
-.grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 980px) { .grid { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; } }
-.core-col { display: grid; gap: 12px; min-width: 0; }
+/* Phones and narrow windows: stack the rail under the core */
+@media (max-width: 860px) {
+  #app { gap: 6px; padding-block: 6px; }
+  .stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 6px; }
+  .core-wrap { height: min(calc((100vw - 72px) / 1.5 + 14px), 52dvh); min-height: 150px; }
+  .rail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto; align-content: stretch; gap: 6px; }
+  .rail .card:not(.power):not(.annun-card) { align-content: center; }
+  .rail .card { padding: 7px 9px; gap: 4px; }
+  .card.power { grid-row: 1 / span 2; grid-template-rows: auto auto minmax(36px, 1fr) auto; min-height: 0; }
+  .power-val { font-size: 26px; }
+  .trend-box { height: auto; min-height: 36px; }
 
-/* Reactor pool */
-.pool {
-  position: relative; border-radius: var(--r); overflow: hidden;
-  background: #030b17; border: 2px solid #0d1d33;
-  box-shadow: inset 0 0 0 1px rgba(120, 180, 255, 0.08);
-  aspect-ratio: 3 / 2; max-width: 100%;
-  touch-action: manipulation;
+  .meter { grid-template-columns: 48px minmax(0, 1fr) 46px; gap: 5px; }
+  .meter .lbl { font-size: 9.5px; letter-spacing: 0.08em; }
+  .meter .val { font-size: 11px; }
+  .annun-card { grid-column: span 2; }
+  .ann { min-height: 22px; font-size: 9px; padding: 3px 1px; }
+  .annun { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .controls { gap: 6px; }
+  .ctl { min-height: 50px; padding: 6px 8px; }
+  .ctl .k { font-size: 13px; }
+  .ctl .s { font-size: 10.5px; }
+  .ctl.scram .k { font-size: 19px; letter-spacing: 0.16em; }
+  .mtitle { font-size: 16px; }
+  .mgoal { font-size: 12px; }
+  .icon-btn { width: 36px; height: 36px; }
+  .clock { font-size: 15px; }
+  .sheet { padding: 16px; }
+  .sheet h2 { font-size: 28px; }
+  .hide-narrow { display: none; }
 }
-.pool canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
-.pool-hint {
-  position: absolute; left: 12px; bottom: 10px; right: 12px;
-  font: 500 12px/1.3 var(--f-mono); color: #a9cbf2; pointer-events: none;
-  width: fit-content; max-width: calc(100% - 24px);
-  background: rgba(3, 11, 23, 0.82); padding: 4px 8px; border-radius: 3px;
+@media (max-width: 860px) and (max-height: 640px) {
+  .card.power .power-sub { display: none; }
 }
-.pool-hint[data-warn] { color: #ffc46b; }
-.pool-tag {
-  position: absolute; top: 8px; left: 12px; pointer-events: none;
-  font: 600 11px/1 var(--f-display); letter-spacing: 0.14em; text-transform: uppercase; color: #a9cbf2;
-  background: rgba(3, 11, 23, 0.82); padding: 4px 8px; border-radius: 3px;
-}
-
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.25); }
-.legend i.n-fast { background: #ffffff; box-shadow: 0 0 0 1px #8aa; }
-.legend i.n-th { background: #4fb8ff; }
-
-/* Readouts */
-.readouts { display: grid; gap: 1px; grid-template-columns: repeat(2, minmax(0, 1fr)); background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
-@media (min-width: 640px) { .readouts { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-.ro { background: var(--plate); padding: 10px 12px; display: grid; gap: 4px; min-width: 0; }
-.ro .v { font: 500 22px/1.1 var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ro .sub { font-size: 12px; color: var(--muted); font-family: var(--f-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ro.keff { grid-column: span 2; }
-@media (min-width: 640px) { .ro.keff { grid-column: auto; } }
-.gauge { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--accent) 0 47%, var(--ok) 47% 53%, var(--warn) 53% 100%); opacity: 0.85; }
-.gauge b { position: absolute; top: -4px; width: 3px; height: 14px; background: var(--ink); border-radius: 1px; transform: translateX(-50%); transition: left 0.25s; }
-
-.instruments { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 760px) { .instruments { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
-.inst { background: var(--plate); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px 12px; display: grid; gap: 8px; min-width: 0; }
-.inst header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.trend { width: 100%; height: 150px; display: block; }
-.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font: 400 12.5px/1.35 var(--f-mono); min-height: 150px; align-content: start; }
-.log li { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
-.log li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.log li span:last-child { color: var(--muted); flex: none; }
-.log li:first-child { color: var(--accent); }
-.log .empty { color: var(--muted); }
-
-/* Control panel */
-.panel { display: grid; gap: 12px; min-width: 0; }
-.plate {
-  background: var(--plate); border: 1px solid var(--line); border-radius: var(--r);
-  padding: 12px; display: grid; gap: 10px; min-width: 0; margin: 0;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
-}
-.plate legend, .plate > .label { padding: 0; float: left; width: 100%; }
-fieldset.plate > legend + * { clear: both; }
-.plate-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-
-.fuels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.choice { position: relative; display: block; cursor: pointer; }
-.choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.choice .face {
-  display: grid; gap: 2px; padding: 8px 10px; border-radius: 4px;
-  border: 1px solid var(--line); background: var(--plate-2); height: 100%;
-}
-.choice .face b { font: 700 16px/1.1 var(--f-display); letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px; }
-.choice .face small { font-size: 12px; color: var(--muted); line-height: 1.3; }
-.choice .face b i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.choice input:checked + .face { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.choice input:focus-visible + .face { outline: 2px solid var(--focus); outline-offset: 2px; }
-.choice:hover .face { border-color: var(--muted); }
-
-.facts { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13.5px; }
-.facts dt { color: var(--muted); }
-.facts dd { margin: 0; font-family: var(--f-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
-.note { margin: 0; font-size: 14px; max-width: 62ch; }
-
-.seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.seg .face { padding: 6px 10px; }
-.seg .face b { font-size: 15px; }
-
-.slider-row { display: grid; gap: 6px; }
-.slider-row output { font: 500 14px var(--f-mono); }
-input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
-input[type="range"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
-
-.toggles { display: grid; gap: 8px; }
-.toggle { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 14px; }
-.toggle input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
-.toggle small { display: block; color: var(--muted); font-size: 12.5px; }
-
-.btns { display: flex; flex-wrap: wrap; gap: 8px; }
-button {
-  font: 600 14px/1 var(--f-display); letter-spacing: 0.08em; text-transform: uppercase;
-  padding: 10px 14px; border-radius: 4px; border: 1px solid var(--line);
-  background: var(--plate-2); color: var(--ink); cursor: pointer;
-}
-button:hover { border-color: var(--muted); }
-button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-.scram {
-  width: 100%; padding: 12px; font-size: 18px; letter-spacing: 0.2em;
-  background: var(--scram); color: var(--scram-ink); border: 2px solid var(--scram);
-  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25);
-  background-image: repeating-linear-gradient(-45deg, transparent 0 10px, rgba(0,0,0,0.08) 10px 20px);
-}
-.scram:hover { filter: brightness(1.08); border-color: var(--scram); }
-
-footer.foot { color: var(--muted); font-size: 13px; max-width: 90ch; display: grid; gap: 6px; }
-footer.foot p { margin: 0; }
-footer.foot a { color: var(--accent); }
-
 @media (prefers-reduced-motion: reduce) {
-  .gauge b { transition: none; }
-  .state[data-s="excursion"] .lamp { animation: none; }
+  .ann.blink { animation: none; }
+  .mbar i { transition: none; }
 }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="bar">
-    <div class="brand">
-      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
-        <circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="2" opacity="0.35"/>
-        <circle cx="14" cy="22" r="6" fill="#ffb238"/>
-        <circle cx="26" cy="17" r="5" fill="#ff5c8a"/>
-        <circle cx="31" cy="30" r="2" fill="#4fb8ff"/>
-        <circle cx="7" cy="9" r="2" fill="#4fb8ff"/>
-      </svg>
-      <div>
-        <h1>Chain Reaction Lab</h1>
-        <p>A stylized fission simulator. Pick a fuel, set the moderator and rods, and fire neutrons into the core.</p>
-      </div>
+<div id="app">
+  <header class="top">
+    <button class="icon-btn" id="menuBtn" type="button" aria-label="Levels">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+    </button>
+    <div class="mission">
+      <div class="mission-row"><span class="mtitle" id="mTitle">Chain Reaction Lab</span><span class="mdesign" id="mDesign">PWR</span><span class="mgoal" id="mGoal"></span></div>
+      <div class="mbar"><i id="mProg"></i></div>
     </div>
-    <div class="state" id="state" data-s="sub" role="status" aria-live="polite">
-      <span class="lamp"></span><span id="stateText">Subcritical</span><span class="k" id="stateK">k —</span>
-    </div>
+    <span class="clock mono" id="clock">0:00</span>
+    <button class="icon-btn" id="pauseBtn" type="button" aria-label="Pause">
+      <svg viewBox="0 0 20 20" fill="currentColor" id="pauseIcon"><rect x="5" y="4" width="3.5" height="12" rx="1"/><rect x="11.5" y="4" width="3.5" height="12" rx="1"/></svg>
+    </button>
+    <button class="icon-btn" id="soundBtn" type="button" aria-label="Sound" aria-pressed="true">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3V5L6 8H3z" fill="currentColor"/><path id="soundWaves" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.5 5.5a6.5 6.5 0 0 1 0 9"/></svg>
+    </button>
   </header>
 
-  <main class="grid">
-    <section class="core-col" aria-label="Reactor core and instruments">
-      <div class="pool" id="pool">
-        <canvas id="core" aria-label="Reactor core. Click or tap to fire neutrons."></canvas>
-        <div class="pool-tag" id="poolTag">Core · LEU · light water</div>
-        <div class="pool-hint" id="hint">Click or tap anywhere in the core to fire neutrons.</div>
+  <main class="stage">
+    <div class="core-wrap" id="coreWrap">
+      <canvas id="core" aria-label="Reactor core. Drag a control rod up or down to move it."></canvas>
+      <div class="lever" id="lever" aria-label="Move all control rods" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+        <span class="lbl">Out</span>
+        <div class="lever-track" id="leverTrack"><span class="lever-target" id="leverTarget"></span><span class="lever-handle" id="leverHandle"></span></div>
+        <span class="lbl">In</span>
       </div>
-      <div class="legend" id="legend"></div>
-
-      <div class="readouts">
-        <div class="ro keff">
-          <span class="label">k-effective</span>
-          <span class="v" id="roK">—</span>
-          <div class="gauge" aria-hidden="true"><b id="gaugeNeedle" style="left:0%"></b></div>
-        </div>
-        <div class="ro">
-          <span class="label">Neutrons</span>
-          <span class="v" id="roN">0</span>
-          <span class="sub" id="roNsub">0 fast · 0 thermal</span>
-        </div>
-        <div class="ro">
-          <span class="label">Fission rate</span>
-          <span class="v" id="roF">0 /s</span>
-          <span class="sub" id="roFsub">0 total</span>
-        </div>
-        <div class="ro">
-          <span class="label">Thermal power</span>
-          <span class="v" id="roP">0 MeV/s</span>
-          <span class="sub" id="roPsub">0 W</span>
-        </div>
-        <div class="ro">
-          <span class="label">Fissile inventory</span>
-          <span class="v" id="roFuel">100%</span>
-          <span class="sub" id="roFuelsub">0 bred</span>
-        </div>
+      <div class="core-hint" id="hint">Drag a rod up to pull it out. The lever moves them all.</div>
+      <div class="toast" id="toast" hidden></div>
+      <div class="fault-row" id="faultRow" hidden>
+        <button type="button" id="faultPumps">Trip pumps</button>
+        <button type="button" id="faultLeak">Break a pipe</button>
       </div>
+    </div>
 
-      <div class="instruments">
-        <div class="inst">
-          <header><span class="label">Neutron population · last 60 s</span><span class="label" id="trendMax">log scale</span></header>
-          <canvas class="trend" id="trend" aria-label="Neutron population over the last 60 seconds, log scale"></canvas>
-        </div>
-        <div class="inst">
-          <header><span class="label">Reaction log</span><span class="label" id="energyTotal">0 MeV</span></header>
-          <ul class="log" id="log"><li class="empty">Waiting for the first fission…</li></ul>
-        </div>
+    <aside class="rail" aria-label="Instruments">
+      <div class="card power">
+        <div class="power-head"><span class="lbl">Reactor power</span><span class="lbl" id="targetLbl"></span></div>
+        <div class="power-val" id="powerVal">0<small>%</small></div>
+        <div class="trend-box"><canvas class="trend" id="trend" aria-label="Power over the last 60 seconds"></canvas></div>
+        <div class="power-sub"><span>Period <b id="periodVal">∞</b></span><span>ρ <b id="rhoVal">0</b></span></div>
       </div>
-    </section>
-
-    <aside class="panel" aria-label="Control panel">
-      <fieldset class="plate">
-        <legend class="label">Fuel</legend>
-        <div class="fuels" id="fuels"></div>
-        <dl class="facts" id="facts"></dl>
-        <p class="note" id="fuelNote"></p>
-      </fieldset>
-
-      <fieldset class="plate">
-        <legend class="label">Moderator</legend>
-        <div class="seg" id="mods"></div>
-      </fieldset>
-
-      <div class="plate">
-        <div class="plate-head"><label class="label" for="rods">Control rods · B₄C</label><output class="mono" id="rodsOut" for="rods">60% in</output></div>
-        <input type="range" id="rods" min="0" max="100" step="1" value="60">
-        <button class="scram" id="scram" type="button">Scram</button>
+      <div class="card">
+        <div class="meter"><span class="lbl">Fuel CL</span><div class="bar" id="fuelBar"><i></i><b></b></div><span class="val" id="fuelVal">0°</span></div>
+        <div class="meter"><span class="lbl">Clad</span><div class="bar" id="cladBar"><i></i><b></b></div><span class="val" id="cladVal">0°</span></div>
+        <div class="meter"><span class="lbl">Coolant</span><div class="bar" id="coolBar"><i></i><b class="limit2"></b></div><span class="val" id="coolVal">0°</span></div>
       </div>
-
-      <div class="plate">
-        <span class="label">Core</span>
-        <div class="toggles">
-          <label class="toggle"><input type="checkbox" id="reflector" checked><span>Beryllium reflector<small>Bounces most escaping neutrons back into the core.</small></span></label>
-          <label class="toggle"><input type="checkbox" id="source" checked><span>Am-Be startup source<small>Emits a few neutrons per second from the center, even with no chain running.</small></span></label>
-        </div>
+      <div class="card">
+        <div class="meter"><span class="lbl">Water</span><div class="bar" id="levelBar"><i></i></div><span class="val" id="levelVal">100%</span></div>
+        <div class="meter"><span class="lbl">Flow</span><div class="bar" id="flowBar"><i></i></div><span class="val" id="flowVal">100%</span></div>
+        <div class="meter"><span class="lbl">Xenon</span><div class="bar" id="xeBar"><i></i></div><span class="val" id="xeVal">0</span></div>
       </div>
-
-      <div class="plate">
-        <div class="plate-head"><label class="label" for="speed">Time scale</label><output class="mono" id="speedOut" for="speed">1.0×</output></div>
-        <input type="range" id="speed" min="0.25" max="3" step="0.25" value="1">
-        <div class="btns">
-          <button class="primary" id="fire" type="button">Fire neutrons</button>
-          <button id="pause" type="button">Pause</button>
-          <button id="refuel" type="button">Refuel core</button>
-        </div>
+      <div class="card annun-card">
+        <div class="annun" id="annun"></div>
       </div>
     </aside>
   </main>
 
-  <footer class="foot">
-    <p>Stylized model. Fissile concentrations, delayed-neutron fractions (×8) and decay times are exaggerated so a reaction is visible with about 1,300 nuclei in two dimensions. Neutrons per fission (ν), energy per fission and delayed fractions shown in the fuel facts are real values.</p>
-    <p>Doppler feedback is modeled: as the fission rate climbs, the fuel heats up and U-238 or Th-232 capture more neutrons, which pulls k back down. Fast cores with no moderator get much less of this help.</p>
-    <p>k-effective is measured live as neutrons born from fission divided by neutrons lost to absorption or leakage over the last 3 seconds.</p>
+  <footer class="controls">
+    <button class="ctl" id="pumpBtn" type="button" aria-pressed="true"><span class="k">Pumps</span><span class="s" id="pumpSub">On · 100%</span></button>
+    <button class="ctl eccs" id="eccsBtn" type="button" aria-pressed="false"><span class="k">ECCS</span><span class="s" id="eccsSub">Ready · 75 s</span></button>
+    <button class="ctl" id="refuelBtn" type="button"><span class="k">Refuel</span><span class="s" id="refuelSub">Fuel 100%</span></button>
+    <button class="ctl scram" id="scramBtn" type="button"><span class="k" id="scramK">Scram</span><span class="s" id="scramSub">All rods in</span></button>
   </footer>
 </div>
 
+<div class="overlay" id="overlay" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+
 <script src="sim.js"></script>
-<script src="app.js"></script>
+<script src="plant.js"></script>
+<script src="game.js"></script>
 </body>
 </html>

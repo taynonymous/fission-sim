@@ -1,33 +1,54 @@
 # Chain Reaction Lab
 
-A stylized, interactive nuclear fission chain-reaction simulator. Static site, no build step, no dependencies.
+Two static web apps, no build step, no dependencies.
 
-Pick a fuel (natural U, LEU, HEU, Pu-239, MOX, thorium/U-233), a moderator (none, light water, heavy water, graphite), set control rods, toggle a Be reflector and an Am-Be startup source, then click the core to fire neutrons. Live readouts show k-effective, neutron population, fission rate, power and fissile inventory.
+## `/` — the game
 
-## What's modeled
+Run a nuclear reactor without melting it down. One screen, built for touch and mouse:
 
-- Hex lattice of ~1,300 nuclei; fast and thermal neutrons with different effective cross-sections
-- Fission, radiative capture, scatter, leakage, reflector, B₄C control rods with SCRAM
-- Moderator thermalization, parasitic absorption and resonance capture
-- Delayed neutrons (β exaggerated ×8 so they're visible)
-- Breeding: U-238 → Pu-239, Th-232 → U-233
-- Fission-product and Xe-135 poisoning, fuel burnup
-- Doppler (fuel temperature) negative feedback
+- **Drag a control rod** in the core to move it; drag the **lever** to move all rods. Mouse wheel / `↑` `↓` also work.
+- **Pumps, ECCS, Refuel, SCRAM** live in the bottom bar. `X` = SCRAM, `P` = pause.
+- Instruments: power (log below 1%, linear above), reactor period, reactivity in dollars, fuel centerline / cladding / coolant temperatures, water level, flow, xenon, and an annunciator panel.
 
-Real ν, energy per fission and β are used per isotope; concentrations and time scales are stylized.
+Levels, each built on a real event or design trait:
+
+| # | Level | Design | Lesson |
+|---|-------|--------|--------|
+| 1 | First Criticality | PWR | Startup through 7 decades of power; reactor period; Doppler feedback |
+| 2 | Follow the Grid | PWR | Load following against xenon-135 |
+| 3 | Loss of Coolant | PWR | Decay heat, ECCS, zirconium–steam reaction (TMI-2) |
+| 4 | Online Refuelling | CANDU | Natural uranium has little excess reactivity |
+| 5 | The Night Test | RBMK | Positive void coefficient, slow SCRAM, graphite rod tips (Chernobyl) |
+| 6 | Walk-Away Safe | SFR | Inherent shutdown on loss of flow (EBR-II, 1986) |
+
+Plus free play on any design, with fault buttons.
+
+### Physics (`plant.js`)
+
+- One-delayed-group point kinetics, implicit integration, real β per fuel; ~10× time compression.
+- Reactivity: rod S-curves weighted by flux, Doppler, moderator temperature, void, xenon, burnup, ECCS boron, RBMK graphite tips.
+- Iodine-135 → xenon-135 dynamics, decay heat, lumped fuel/coolant temperatures, pumps with coast-down, natural circulation, boiling and dry-out, loss-of-coolant inventory, ECCS.
+- The particle core from `sim.js` is the visual layer: its fission rate is steered to follow plant power, while rods still absorb neutrons where they are.
+
+## `/simulator/` — the sandbox
+
+The original free-form particle simulation: pick a fuel and moderator, set rods, fire neutrons, watch k-effective.
+
+## Files
+
+- `sim.js` – particle neutronics engine (shared; DOM-free)
+- `plant.js` – plant model for the game (DOM-free)
+- `game.js`, `index.html` – the game
+- `simulator/` – the sandbox UI
+
+Node can load `sim.js` and `plant.js` directly for tuning and scenario tests.
 
 ## Run locally
 
 ```sh
-python3 -m http.server 8000   # then open http://localhost:8000
+python3 -m http.server 8000   # http://localhost:8000 and /simulator/
 ```
-
-## Files
-
-- `sim.js` – physics engine, DOM-free (runs in Node too)
-- `app.js` – rendering, controls, instruments
-- `index.html` – layout and styles
 
 ## Deploy
 
-`.github/workflows/pages.yml` publishes to GitHub Pages on push to `main`. GitHub Pages on a private repo requires a paid plan; otherwise make the repo public.
+`.github/workflows/pages.yml` publishes to GitHub Pages on push to `main`. GitHub Pages on a private repo requires a paid plan; otherwise make the repo public, then set Settings → Pages → Source to "GitHub Actions".

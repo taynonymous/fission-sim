@@ -133,6 +133,9 @@
       births: new Float64Array(NBUCKETS), losses: new Float64Array(NBUCKETS),
       fisB: new Float64Array(NBUCKETS), eB: new Float64Array(NBUCKETS), bucketIdx: 0, bucketT: 0,
       sourceAcc: 0, rodXs: [], totB: 0, totL: 0, doppler: 1,
+      // Optional hooks for a plant model layered on top (see plant.js):
+      // feedback = { doppler, thermScale, extraAbs, fastAbs } replaces the built-in Doppler estimate.
+      feedback: null, modObj: null, reflectY: true, rodDepths: null, burnFrac: opts.burnFrac == null ? 1 : opts.burnFrac,
     };
     for (let r = 0; r < ROD_COUNT; r++) s.rodXs.push(((r + 1) / (ROD_COUNT + 1)) * W);
 
@@ -143,7 +146,7 @@
     }
 
     s.loadFuel = function (id) {
-      const f = FUELS.find(x => x.id === id) || s.fuel;
+      const f = typeof id === 'object' ? id : (FUELS.find(x => x.id === id) || s.fuel);
       s.fuel = f;
       const entries = Object.entries(f.mix).map(([t, p]) => [+t, p]);
       for (let k = 0; k < N; k++) {
@@ -184,7 +187,7 @@
           s.pending.push({ t: s.time + 0.3 + -Math.log(1 - rand()) * 1.4, x, y });
         } else spawn(x, y, false);
       }
-      if (--atoms[k] === 0) {
+      if ((s.burnFrac >= 1 || rand() < s.burnFrac) && --atoms[k] === 0) {
         type[k] = rand() < 0.25 ? T.XE135 : T.FP;
         timer[k] = type[k] === T.XE135 ? 6 + rand() * 10 : 0;
       }
@@ -203,6 +206,8 @@
     }
 
     function capture(k, t) {
+      // burnFrac < 1 slows composition change (each site stands for many atoms)
+      if (s.burnFrac < 1 && t !== T.XE135 && rand() >= s.burnFrac) return;
       if (t === T.U238) { type[k] = T.BREED_PU; timer[k] = 4 + rand() * 5; }
       else if (t === T.TH232) { type[k] = T.BREED_U3; timer[k] = 4 + rand() * 5; }
       else if (t === T.XE135) { type[k] = T.FP; }
@@ -219,16 +224,21 @@
     }
 
     function substep(dt) {
-      const mod = MODERATORS[s.mod];
-      const pTherm = 1 - Math.exp(-mod.therm * dt);
-      const pModAbs = 1 - Math.exp(-mod.abs * dt);
+      const mod = s.modObj || MODERATORS[s.mod];
+      const fb = s.feedback;
+      const pTherm = 1 - Math.exp(-mod.therm * (fb ? fb.thermScale : 1) * dt);
+      const pModAbs = 1 - Math.exp(-(mod.abs + (fb ? fb.extraAbs : 0)) * dt);
+      const pFastAbs = fb && fb.fastAbs ? 1 - Math.exp(-fb.fastAbs * dt) : 0;
       const pRodF = 1 - Math.exp(-ROD_ABS.fast * dt), pRodT = 1 - Math.exp(-ROD_ABS.therm * dt);
-      const rodDepth = s.rods * H, half = ROD_W / 2;
+      // rodDepths (one 0..1 value per rod) overrides the single bank position
+      const depths = s.rodDepths;
+      const rodDepth = (depths ? Math.max(...depths) : s.rods) * H, half = ROD_W / 2;
 
       for (let i = s.n - 1; i >= 0; i--) {
         let x = px[i] + vx[i] * dt, y = py[i] + vy[i] * dt;
         if (x < 0 || x > W || y < 0 || y > H) {
-          if (s.reflector && rand() < REFLECT_P) {
+          const edgeY = y < 0 || y > H;
+          if (s.reflector && (!edgeY || s.reflectY) && rand() < REFLECT_P) {
             if (x < 0 || x > W) { vx[i] = -vx[i]; x = Math.min(W, Math.max(0, x)); }
             if (y < 0 || y > H) { vy[i] = -vy[i]; y = Math.min(H, Math.max(0, y)); }
           } else { kill(i); continue; }
@@ -237,7 +247,9 @@
 
         if (y < rodDepth) {
           let inRod = false;
-          for (let r = 0; r < s.rodXs.length; r++) if (Math.abs(x - s.rodXs[r]) < half) { inRod = true; break; }
+          for (let r = 0; r < s.rodXs.length; r++) {
+            if (Math.abs(x - s.rodXs[r]) < half && (!depths || y < depths[r] * H)) { inRod = true; break; }
+          }
           if (inRod && rand() < (th[i] ? pRodT : pRodF)) { kill(i); continue; }
         }
 
@@ -250,7 +262,7 @@
             if (kr >= 0 && (type[kr] === T.U238 || type[kr] === T.TH232) && rand() < mod.res * s.doppler) {
               kill(i); capture(kr, type[kr]); continue;
             }
-          }
+          } else if (pFastAbs && rand() < pFastAbs) { kill(i); continue; }
         } else if (pModAbs && rand() < pModAbs) { kill(i); continue; }
 
         const k = nearestNode(x, y);
@@ -277,7 +289,7 @@
       // Doppler feedback: hotter fuel broadens U-238/Th-232 capture resonances
       let f = 0;
       for (let q = 0; q < NBUCKETS; q++) f += s.fisB[q];
-      s.doppler = 1 + DOPPLER * Math.log10(1 + f / (NBUCKETS * BUCKET) / 40);
+      s.doppler = s.feedback ? s.feedback.doppler : 1 + DOPPLER * Math.log10(1 + f / (NBUCKETS * BUCKET) / 40);
       const subs = Math.max(1, Math.ceil(dt * V_FAST / (SP * 0.25)));
       const h = dt / subs;
       for (let q = 0; q < subs; q++) {
@@ -312,6 +324,29 @@
           }
         }
       }
+    };
+
+    // Remove random neutrons above a ceiling (display steering; not counted as losses).
+    s.cull = function (max) {
+      while (s.n > max) {
+        const i = (rand() * s.n) | 0, e = --s.n;
+        px[i] = px[e]; py[i] = py[e]; vx[i] = vx[e]; vy[i] = vy[e]; th[i] = th[e]; last[i] = last[e];
+      }
+    };
+
+    // Swap the most-burned fraction of fuel sites for fresh fuel (online refuelling).
+    s.refuelPartial = function (frac) {
+      const entries = Object.entries(s.fuel.mix).map(([t, p]) => [+t, p]);
+      const score = k => FISSILE(type[k]) ? atoms[k] / ATOMS : (FERTILE(type[k]) ? 2 : (type[k] === T.BREED_PU || type[k] === T.BREED_U3 ? 2 : 0));
+      const idx = Array.from({ length: N }, (_, k) => k).sort((a, b) => score(a) - score(b));
+      const count = Math.round(N * frac);
+      for (let c = 0; c < count; c++) {
+        const k = idx[c];
+        let r = rand(), t = entries[entries.length - 1][0];
+        for (const [tt, p] of entries) { if (r < p) { t = tt; break; } r -= p; }
+        type[k] = t; timer[k] = 0; atoms[k] = FISSILE(t) ? ATOMS : 1;
+      }
+      return count;
     };
 
     s.stats = function () {

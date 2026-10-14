@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Stage site
-        run: mkdir _site && cp index.html sim.js app.js _site/
+        run: mkdir -p _site/simulator && cp index.html sim.js plant.js game.js _site/ && cp simulator/index.html simulator/app.js _site/simulator/
       - uses: actions/configure-pages@v5
         with:
           enablement: true
