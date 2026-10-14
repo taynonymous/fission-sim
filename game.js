@@ -507,7 +507,7 @@
     const padL = 30, padR = 2, padT = 4, padB = 4, pw = w - padL - padR, ph = h - padT - padB;
     const Y = v => padT + ph * (1 - axY(v));
     tctx.font = '10px "IBM Plex Mono", monospace'; tctx.textBaseline = 'middle'; tctx.textAlign = 'right';
-    [[1e-6, '1e-4'], [0.01, '1%'], [0.5, '50'], [1, '100'], [1.5, '150']].forEach(([v, l]) => {
+    [[1e-6, '10⁻⁴'], [0.01, '1%'], [0.5, '50'], [1, '100'], [1.5, '150']].forEach(([v, l]) => {
       if (h < 50 && (v === 0.5 || v === 1e-6)) return;
       const y = Math.round(Y(v)) + 0.5;
       tctx.strokeStyle = v === 1 ? '#3b5563' : '#1f2f37'; tctx.lineWidth = 1;
@@ -551,13 +551,16 @@
     if (b && markFrac != null) b.style.left = (clamp(markFrac, 0, 1) * 100).toFixed(1) + '%';
   }
   const sev = f => f < 0.6 ? '#5fb4ff' : f < 0.85 ? '#ffc44d' : '#ff5a43';
+  // Tiny powers read as "2.1×10⁻⁵" rather than "2.1e-5", which looks like a negative number.
   function fmtPower(n) {
     const pct = n * 100;
     if (pct >= 10) return pct.toFixed(0);
     if (pct >= 0.1) return pct.toFixed(1);
-    const e = Math.floor(Math.log10(pct)), m = pct / Math.pow(10, e);
-    return m.toFixed(1) + 'e' + e;
+    const e = Math.floor(Math.log10(Math.max(pct, 1e-12))), m = pct / Math.pow(10, e);
+    return `${m.toFixed(1)}×10<sup>−${Math.abs(e)}</sup>`;
   }
+  // Nuclear instrumentation ranges, as on a real control panel
+  const powerRange = n => n < 1e-5 ? 'Source range · shut down' : n < 0.01 ? 'Intermediate range' : 'Power range';
 
   const ANN = [
     ['prompt', 'Prompt crit', p => p.rho >= p.d.beta, 'crit'],
@@ -586,7 +589,7 @@
     rhoEl.textContent = (dol >= 0 ? '+' : '−') + '$' + Math.abs(dol).toFixed(2);
     rhoEl.className = dol >= 1 ? 'hot' : '';
     $('targetLbl').textContent = level.type === 'hold' ? `Target ${Math.round(level.band[0] * 100)}–${Math.round(level.band[1] * 100)}%`
-      : level.type === 'track' ? `Demand ${Math.round(level.demand(g.t) * 100)}%` : '';
+      : level.type === 'track' ? `Demand ${Math.round(level.demand(g.t) * 100)}%` : powerRange(p.n);
 
     const fuelF = (p.Tcl - 0) / d.meltT;
     setBar('fuelBar', fuelF, sev(fuelF), 1);

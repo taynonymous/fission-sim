@@ -79,6 +79,7 @@
   const ECCS_TANK = 75, ECCS_FLOW = 0.7, ECCS_T = 40, ECCS_REFILL = 0.05;
   const NAT_CIRC = 0.05, PUMP_COAST = 3;
   const N_FLOOR = 1e-7;             // source-range floor (fraction of rated)
+  const N_CAP = 1e4;                // numerical ceiling; the fuel melts long before this
   const VIS_RATE = 170;             // particle fissions/s drawn at 100% power
 
   // Rods sit where the flux is highest in the middle of the core.
@@ -97,7 +98,8 @@
 
   function create(designId, opts) {
     opts = opts || {};
-    const d = DESIGNS[designId];
+    // opts.overrides lets tests tweak a design (e.g. disable melting) without touching DESIGNS
+    const d = Object.assign({}, DESIGNS[designId], opts.overrides);
     const sim = F.create({ fuel: 'leu', rand: opts.rand, burnFrac: d.burnFrac });
     sim.modObj = d.mod;
     sim.loadFuel(d.fuel);
@@ -159,7 +161,10 @@
       p.Tc = d.Tin + d.dTcore * frac;
       p.Tf = p.Tc + d.dTfuel * frac;
       p.decay = DECAY_FRAC * frac;
-      p.I = opt.I == null ? frac : opt.I; p.X = opt.X == null ? frac : opt.X;
+      // default iodine/xenon to their equilibrium at this power (matches the I/X equations in step)
+      const pc = Math.min(frac, 3);
+      p.I = opt.I == null ? pc : opt.I;
+      p.X = opt.X == null ? (0.95 * pc + 0.05 * pc) / (0.35 + 0.65 * pc) : opt.X;
       p.C = d.beta / (d.gen * d.lambda) * p.n;
       p.power = frac;
       // bisection on a uniform rod position for rho = 0
@@ -181,13 +186,22 @@
       // implicit one-group point kinetics, sub-stepped
       const rho = p.rho, b = d.beta, L = d.gen, lam = d.lambda;
       const S = N_FLOOR * Math.max(1e-3, -rho) / L;
-      const subs = 8, h = dt / subs;
+      // Near and above prompt critical power grows very fast. Keep each implicit step
+      // well inside that time constant, or the denominator below can reach zero and
+      // flip sign (wrong, even negative, power on long frames).
+      // Step size from the fastest-growing mode: the positive root of the one-group
+      // inhour equation L w^2 + (L lam + beta - rho) w - rho lam = 0.
+      const B = L * lam + b - rho;
+      const growth = Math.max(0, (-B + Math.sqrt(B * B + 4 * L * rho * lam)) / (2 * L));
+      const subs = Math.min(5000, Math.max(8, Math.ceil(dt * growth / 0.02)));
+      const h = dt / subs;
       const n0 = p.n;
       for (let s = 0; s < subs; s++) {
         const a = 1 - h * (rho - b) / L - (h * h * lam * b) / (L * (1 + h * lam));
         const nn = (p.n + h * lam * p.C / (1 + h * lam) + h * S) / a;
-        p.C = (p.C + h * b / L * nn) / (1 + h * lam);
-        p.n = Math.min(nn, 1e4);
+        p.C = Math.max(0, (p.C + h * b / L * nn) / (1 + h * lam));
+        p.n = Math.max(0, Math.min(nn, N_CAP));
+        if (p.n >= N_CAP) break;
       }
       const g = dt > 0 ? Math.log(Math.max(p.n, 1e-12) / Math.max(n0, 1e-12)) / dt : 0;
       p.period = Math.abs(g) < 1e-4 ? Infinity : 1 / g;
@@ -311,7 +325,7 @@
     return p;
   }
 
-  const api = { create, DESIGNS, ROD_COUNT, ROD_WEIGHT, N_FLOOR };
+  const api = { create, DESIGNS, ROD_COUNT, ROD_WEIGHT, N_FLOOR, N_CAP };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Plant = api;
 })(typeof window !== 'undefined' ? window : globalThis);

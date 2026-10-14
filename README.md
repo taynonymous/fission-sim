@@ -43,6 +43,17 @@ The original free-form particle simulation: pick a fuel and moderator, set rods,
 
 Node can load `sim.js` and `plant.js` directly for tuning and scenario tests.
 
+## Tests
+
+```sh
+npm test        # node:test, no dependencies
+```
+
+- `tests/plant.test.js`: point kinetics against the exact one-group solution (including prompt-critical steps on long frames), power never negative/NaN under randomized operator input, rod worth monotonic per rod, shutdown margin > $1 for every design, steady state, rod direction, SCRAM, a procedural startup, and the accident scenarios the levels depend on.
+- `tests/sim.test.js`: golden snapshot of the sandbox engine, rods lowering k, per-rod absorption, moderator physics, `cull` and `refuelPartial`.
+
+CI runs them on every push and PR; the Pages deploy runs them first and won't publish on failure.
+
 ## Run locally
 
 ```sh

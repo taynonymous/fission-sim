@@ -1,0 +1,11 @@
+{
+  "name": "fission-sim",
+  "private": true,
+  "description": "Chain Reaction Lab: reactor operator game and fission sandbox",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
